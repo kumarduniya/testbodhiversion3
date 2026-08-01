@@ -11698,11 +11698,38 @@
             const attemptedCodes = Array.from(new Set(
                 rawRecords.map(r => r.testCode ? String(r.testCode).replace('-RE', '') : '').filter(Boolean)
             ));
-            Promise.all(attemptedCodes.map(code =>
-                db.collection("tests").doc(code).get().then(doc => ({ code, exists: doc.exists, data: doc.exists ?
-                        doc.data() : null }))
-                .catch(() => ({ code, exists: null, data: null })) // null = couldn't verify (e.g. offline) -> don't hide
-            )).then(freshTestDocs => {
+            Promise.all(attemptedCodes.map(code => {
+                const ref = db.collection("tests").doc(code);
+                return ref.get().then(doc => {
+                    if (!doc.exists) return { code, exists: false, data: null };
+                    const td = doc.data();
+                    // Merge in the real answers/explanations from the secure
+                    // sub-document — the main test doc only ever carries
+                    // public-safe fields (no ans/exp), same as how a live
+                    // exam merges them in at load time. If this student
+                    // isn't authorized to read it (e.g. a paid test they
+                    // aren't premium for), it just fails silently and the
+                    // report falls back to showing no solution, same as
+                    // before.
+                    return ref.collection("secure").doc("key").get().then(secureDoc => {
+                        if (secureDoc.exists && td.questions) {
+                            const secure = secureDoc.data();
+                            if (secure.answerKey) {
+                                td.questions = td.questions.map((q, i) => {
+                                    const sk = secure.answerKey[i] || {};
+                                    const predicted = (q.predicted || []).map((p, pi) => ({
+                                        q: p.q || "",
+                                        s: (sk.predictedSolutions && sk.predictedSolutions[pi]) || ""
+                                    }));
+                                    return { ...q, ans: sk.ans || "", exp: sk.exp || "", predicted };
+                                });
+                            }
+                        }
+                        if (td.questions) td.questions = window.sanitizeQuestions(td.questions);
+                        return { code, exists: true, data: td };
+                    }).catch(() => ({ code, exists: true, data: td }));
+                }).catch(() => ({ code, exists: null, data: null })); // null = couldn't verify (e.g. offline) -> don't hide
+            })).then(freshTestDocs => {
                 const freshVersionOf = {};
                 const freshExistsOf = {};
                 const freshTestByCode = {};
