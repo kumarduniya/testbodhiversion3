@@ -3406,6 +3406,10 @@
             background: #fff !important;
             margin: 0 !important;
             padding: 0 !important;
+            /* The compact-size zoom (see body{} rule near the top) isn't
+               understood by the print rendering pipeline and was producing a
+               blank printed page — force normal scale for PDF export. */
+            zoom: 1 !important;
         }
         body.print-pdf #main-ui-container,
         body.print-pdf #top-sticky-wrapper,
@@ -3437,6 +3441,7 @@
                 background: #fff !important;
                 margin: 0 !important;
                 padding: 0 !important;
+                zoom: 1 !important;
             }
             .container {
                 box-shadow: none !important;
@@ -11634,12 +11639,18 @@
             const certElement = document.getElementById('score-card-cert');
             if (!certElement) return;
             window.showLoadingModal("Generating certificate image...<br>Please wait.");
+            // html2canvas doesn't reliably understand the compact-size CSS
+            // zoom on <body> (see body{} rule near the top) — briefly turn
+            // it off for the capture so the certificate isn't blank/garbled.
+            const prevZoom = document.body.style.zoom;
+            document.body.style.zoom = '1';
             html2canvas(certElement, {
                 scale: 2,
                 useCORS: true,
                 logging: false,
                 backgroundColor: '#ffffff'
             }).then(canvas => {
+                document.body.style.zoom = prevZoom;
                 window.closeModal();
                 const link = document.createElement('a');
                 link.download = (window.studentInfo.name || "Student") + '_Certificate.png';
@@ -11647,6 +11658,7 @@
                 link.click();
                 window.showCustomAlert("Success", "Certificate downloaded! 🎓", "✅");
             }).catch(err => {
+                document.body.style.zoom = prevZoom;
                 window.closeModal();
                 window.showCustomAlert("Error", "Failed to generate certificate: " + err.message, "❌");
             });
