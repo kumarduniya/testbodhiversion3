@@ -531,12 +531,15 @@
 
         /* ---- HEADER NAV STRIP (thin horizontal bar under header) ---- */
         .header-nav-strip {
+            box-sizing: border-box;
             width: 100%;
+            flex: 0 0 100%;
+            max-width: 100%;
             display: none;
             align-items: center;
             gap: 8px;
-            background: rgba(0,0,0,0.14);
-            padding: 6px 10px;
+            background: rgba(0,0,0,0.22);
+            padding: 6px 14px;
             border-top: 1px solid rgba(255,255,255,0.10);
         }
         .header-nav-strip.flex-visible {
@@ -562,13 +565,22 @@
         }
         .hns-items {
             flex: 1;
+            min-width: 0;
             display: flex;
             align-items: center;
+            justify-content: flex-start;
             gap: 6px;
             overflow-x: auto;
             white-space: nowrap;
             scrollbar-width: none;
             -ms-overflow-style: none;
+        }
+        @media (min-width: 640px) {
+            .hns-items {
+                justify-content: space-evenly;
+                overflow-x: visible;
+                flex-wrap: wrap;
+            }
         }
         .hns-items::-webkit-scrollbar {
             display: none;
@@ -3151,6 +3163,29 @@
             font-weight: 700;
         }
 
+        /* The certificate is intentionally a fixed light "printable card"
+           look in both themes (like the PDF export). Its background never
+           switches to dark, so every text color inside it must stay pinned
+           to readable dark-on-light values in Dark Mode too — otherwise
+           --text-main/--text-muted/--bg-subtle would turn light-on-light
+           or low-contrast and become hard to read. */
+        body.dark-mode .score-card-certificate {
+            background: linear-gradient(145deg, #ffffff, #f8faff);
+        }
+        body.dark-mode .score-card-certificate .cert-header .cert-title-group .cert-sub-title,
+        body.dark-mode .score-card-certificate .cert-body .cert-item .cert-label,
+        body.dark-mode .score-card-certificate .cert-body .cert-item .cert-sub,
+        body.dark-mode .score-card-certificate .cert-footer .cert-date {
+            color: #6b7a8f;
+        }
+        body.dark-mode .score-card-certificate .cert-body .cert-item {
+            background: #f0f4fa;
+            border-color: #e2e8f0;
+        }
+        body.dark-mode .score-card-certificate .cert-footer .cert-student {
+            color: #1a2332;
+        }
+
         /* ============================================================
            RESULT VIEW – TWO COLUMN LAYOUT
            ============================================================ */
@@ -5012,6 +5047,21 @@
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
         }
+
+        /* ============================================================
+           OVERALL UI SCALE — slightly more compact/professional density.
+           Uses `zoom` (not `transform`) so it uniformly shrinks every
+           button/card/text/spacing together while keeping position:sticky,
+           position:fixed, modals, and existing responsive breakpoints all
+           behaving exactly as before, just at a smaller overall size.
+           Skipped on very small phones so nothing gets too cramped there.
+           ============================================================ */
+        @media (min-width: 768px) and (max-width: 1279px) {
+            body { zoom: 0.94; }
+        }
+        @media (min-width: 1280px) {
+            body { zoom: 0.9; }
+        }
         img,
         svg {
             -webkit-user-drag: none;
@@ -5400,6 +5450,7 @@
     <button class="theme-toggle" onclick="window.toggleDarkMode()" title="Toggle Theme">🌙 Dark</button>
     <div id="timer-box" class="timer" style="display:none;"><span>⏱</span><span id="main-time">00:00</span></div>
 </div>
+            </div>
             <!-- ===== HEADER NAV STRIP (thin horizontal menu bar under header) ===== -->
             <div class="header-nav-strip" id="header-nav-strip">
                 <button class="hns-toggle" id="header-menu-btn" onclick="window.toggleHeaderMenu(event)" title="Menu">☰</button>
@@ -6572,6 +6623,36 @@
             localStorage.setItem('mockSarthiTheme', isDark ? 'dark' : 'light');
             const toggleBtn = document.querySelector('.theme-toggle');
             if (toggleBtn) toggleBtn.innerText = isDark ? '☀️ Light' : '🌙 Dark';
+            window.refreshChartsForTheme(isDark);
+        };
+
+        // Chart.js draws its legend/axis labels and gridlines onto a canvas
+        // using plain colors chosen at creation time — they do NOT follow
+        // CSS variables, so without this, toggling the theme while a report
+        // is open leaves chart text unreadable (e.g. dark labels on a now-
+        // dark background). This walks every live chart and repaints them.
+        window.refreshChartsForTheme = function(isDark) {
+            try {
+                if (typeof Chart === 'undefined' || !Chart.instances) return;
+                const textColor = isDark ? '#e8edf5' : '#1a2332';
+                const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+                const blankBorder = isDark ? '#ffffff' : '#94a3b8';
+                Object.values(Chart.instances).forEach(function(chart) {
+                    if (!chart || !chart.options) return;
+                    const legendLabels = chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels;
+                    if (legendLabels) legendLabels.color = textColor;
+                    const scales = chart.options.scales || {};
+                    Object.keys(scales).forEach(function(axisKey) {
+                        const axis = scales[axisKey];
+                        if (axis.ticks) axis.ticks.color = textColor;
+                        if (axis.grid && typeof axis.grid.color !== 'undefined') axis.grid.color = gridColor;
+                    });
+                    (chart.data.datasets || []).forEach(function(ds) {
+                        if (ds.label && ds.label.indexOf('Blank') !== -1) ds.borderColor = blankBorder;
+                    });
+                    chart.update();
+                });
+            } catch (e) { /* cosmetic refresh only — never break the app */ }
         };
 
         window.getHiddenTests = function() {
