@@ -84,6 +84,16 @@
         }
 
         body.dark-mode {
+            /* --primary/--primary-light/--primary-dark were never overridden
+               for dark mode before, even though var(--primary) alone is used
+               in 100+ places site-wide for text/icon/border colors — on the
+               dark backgrounds below, the original navy (#0f2b5c) rendered
+               almost invisibly (e.g. the Chapter filter chips in My Report).
+               Lightened here to stay readable against dark backgrounds. */
+            --primary: #6fa8dc;
+            --primary-light: #9cc7f0;
+            --primary-dark: #1a4b8c;
+            --badge-bg: rgba(255, 255, 255, 0.10);
             --bg-body: #050a14;
             --bg-container: #0d1a2e;
             --bg-card: #1a2a4a;
@@ -5576,9 +5586,9 @@
                 </div>
             </div>
 
-            <div class="admin-tabs" style="justify-content:center;gap:8px;border:none;margin-bottom:8px;flex-wrap:wrap;">
-                <button class="tab-btn active" id="tab-st-active" style="border-radius:var(--radius);flex:none;width:45%;" onclick="window.switchStudentTab('active')">📝 Active Tests</button>
-                <button class="tab-btn" id="tab-st-live" style="border-radius:var(--radius);flex:none;width:45%;background:var(--danger);color:#fff;" onclick="window.switchStudentTab('live')">🔴 Live Tests</button>
+            <div class="admin-tabs" style="justify-content:center;gap:8px;border:none;margin-bottom:8px;flex-wrap:nowrap;">
+                <button class="tab-btn active" id="tab-st-active" style="border-radius:var(--radius);flex:1;" onclick="window.switchStudentTab('active')">📝 Active Tests</button>
+                <button class="tab-btn" id="tab-st-live" style="border-radius:var(--radius);flex:1;background:var(--danger);color:#fff;" onclick="window.switchStudentTab('live')">🔴 Live Tests</button>
             </div>
 
             <div id="st-active-section">
