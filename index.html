@@ -6170,13 +6170,14 @@
                         if (r.testCode) {
                             const code = String(r.testCode).replace('-RE', '');
                             const currentVersion = testVersionOf[code];
-                            // Only treat as "no version info" (always keep) when the
-                            // field is truly ABSENT on one side — 0 is a real,
-                            // comparable version (a test attempted before it had
-                            // ever been edited), not "unknown".
-                            const hasBothVersions = typeof currentVersion !== 'undefined' && typeof r.testVersion !==
-                                'undefined';
-                            const isStale = hasBothVersions && currentVersion !== r.testVersion;
+                            // If the test has NEVER been edited under this
+                            // system (no updatedAt at all), nothing to
+                            // invalidate against -> keep. Otherwise the
+                            // result must match exactly — including old
+                            // results with no testVersion at all, which now
+                            // count as definitely stale, not "unknown".
+                            const isStale = (typeof currentVersion !== 'undefined') && (currentVersion !== r
+                                .testVersion);
                             if (isStale) return;
                             const prevScore = attemptedRecords[code];
                             if (prevScore === undefined || Number(r.score) > Number(prevScore)) {
@@ -11717,11 +11718,13 @@
             const records = rawRecords.filter(r => {
                 const code = r.testCode ? String(r.testCode).replace('-RE', '') : '';
                 const currentVersion = testVersionOf[code];
-                // Only "no version info" (always keep) when the field is
-                // truly ABSENT on one side — 0 is a real, comparable version
-                // (attempted before the test had ever been edited), not
-                // "unknown".
-                if (typeof currentVersion === 'undefined' || typeof r.testVersion === 'undefined') return true;
+                // If the test itself has NEVER been edited under this system
+                // (no updatedAt at all yet), there's nothing to invalidate
+                // against, so keep it. Otherwise — the test HAS a real
+                // version — the result must match it exactly, INCLUDING
+                // results from before this feature existed (no testVersion
+                // at all counts as definitely stale, not "unknown").
+                if (typeof currentVersion === 'undefined') return true;
                 return currentVersion === r.testVersion;
             });
 
