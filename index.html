@@ -11670,26 +11670,29 @@
                 rawRecords.map(r => r.testCode ? String(r.testCode).replace('-RE', '') : '').filter(Boolean)
             ));
             Promise.all(attemptedCodes.map(code =>
-                db.collection("tests").doc(code).get().then(doc => ({ code, data: doc.exists ? doc.data() : null }))
-                    .catch(() => ({ code, data: null }))
+                db.collection("tests").doc(code).get().then(doc => ({ code, exists: doc.exists, data: doc.exists ?
+                        doc.data() : null }))
+                .catch(() => ({ code, exists: null, data: null })) // null = couldn't verify (e.g. offline) -> don't hide
             )).then(freshTestDocs => {
                 const freshVersionOf = {};
+                const freshExistsOf = {};
                 const freshTestByCode = {};
-                freshTestDocs.forEach(({ code, data: td }) => {
-                    if (!td) return; // test was deleted entirely -> no version info, handled by "keep" fallback below
+                freshTestDocs.forEach(({ code, exists, data: td }) => {
+                    freshExistsOf[code] = exists; // true, false, or null (unknown)
+                    if (!td) return; // test doesn't exist (or fetch failed) -> no version info either
                     freshTestByCode[code] = td;
                     const ts = td.updatedAt;
                     freshVersionOf[code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) : undefined;
                 });
-                window._proceedWithReportRecords(rawRecords, freshVersionOf, freshTestByCode);
+                window._proceedWithReportRecords(rawRecords, freshVersionOf, freshTestByCode, freshExistsOf);
             }).catch(() => {
                 // Firestore fetch failed entirely (e.g. offline) — fall back to
                 // whatever's in the shared cache rather than blocking the report.
-                window._proceedWithReportRecords(rawRecords, null, null);
+                window._proceedWithReportRecords(rawRecords, null, null, null);
             });
         };
 
-        window._proceedWithReportRecords = function(rawRecords, freshVersionOf, freshTestByCode) {
+        window._proceedWithReportRecords = function(rawRecords, freshVersionOf, freshTestByCode, freshExistsOf) {
             const list = document.getElementById('st-hist-list');
             if (!list) return;
 
@@ -11717,6 +11720,14 @@
             if (freshVersionOf) Object.assign(testVersionOf, freshVersionOf);
             const records = rawRecords.filter(r => {
                 const code = r.testCode ? String(r.testCode).replace('-RE', '') : '';
+                // A test confirmed to no longer exist at all (deleted, or an
+                // old demo/dev-testing test that was never really a saved
+                // test) means this record has nothing to attach to anymore
+                // — hide it outright. `freshExistsOf[code] === false` is a
+                // CONFIRMED deletion (a live Firestore lookup came back
+                // empty); `undefined`/`null` means "couldn't verify" and we
+                // don't hide on an unverified guess.
+                if (freshExistsOf && freshExistsOf[code] === false) return false;
                 const currentVersion = testVersionOf[code];
                 // If the test itself has NEVER been edited under this system
                 // (no updatedAt at all yet), there's nothing to invalidate
