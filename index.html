@@ -6142,34 +6142,52 @@
                 // Same stale-result rule as My Report: a result stamped for
                 // an older test `updatedAt` doesn't count as "attempted"
                 // once the admin has re-saved the test, so the dashboard
-                // button goes back to "Give Test" too.
-                const testVersionOf = {};
-                (window.getAllMergedTests ? window.getAllMergedTests() : []).forEach(t => {
-                    const ts = t.updatedAt;
-                    testVersionOf[t.code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) : undefined;
-                });
-                const attemptedRecords = {};
-                records.forEach(r => {
-                    if (r.testCode) {
-                        const code = String(r.testCode).replace('-RE', '');
-                        const currentVersion = testVersionOf[code];
-                        // Only treat as "no version info" (always keep) when the
-                        // field is truly ABSENT on one side — 0 is a real,
-                        // comparable version (a test attempted before it had
-                        // ever been edited), not "unknown".
-                        const hasBothVersions = typeof currentVersion !== 'undefined' && typeof r.testVersion !==
-                            'undefined';
-                        const isStale = hasBothVersions && currentVersion !== r.testVersion;
-                        if (isStale) return;
-                        const prevScore = attemptedRecords[code];
-                        if (prevScore === undefined || Number(r.score) > Number(prevScore)) {
-                            attemptedRecords[code] = r.score;
+                // button goes back to "Give Test" too. Fetched fresh,
+                // directly from Firestore, for exactly the attempted codes —
+                // this runs at login time, before the Active-Tests listener
+                // has necessarily attached, so window.getAllMergedTests()
+                // can't be trusted to have this test's current updatedAt yet.
+                const attemptedCodes = Array.from(new Set(
+                    records.map(r => r.testCode ? String(r.testCode).replace('-RE', '') : '').filter(Boolean)
+                ));
+                Promise.all(attemptedCodes.map(code =>
+                    db.collection("tests").doc(code).get()
+                        .then(doc => ({ code, updatedAt: doc.exists ? doc.data().updatedAt : null }))
+                        .catch(() => ({ code, updatedAt: null }))
+                )).then(freshDocs => {
+                    const testVersionOf = {};
+                    (window.getAllMergedTests ? window.getAllMergedTests() : []).forEach(t => {
+                        const ts = t.updatedAt;
+                        testVersionOf[t.code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) :
+                            undefined;
+                    });
+                    freshDocs.forEach(({ code, updatedAt: ts }) => {
+                        testVersionOf[code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) :
+                            undefined;
+                    });
+                    const attemptedRecords = {};
+                    records.forEach(r => {
+                        if (r.testCode) {
+                            const code = String(r.testCode).replace('-RE', '');
+                            const currentVersion = testVersionOf[code];
+                            // Only treat as "no version info" (always keep) when the
+                            // field is truly ABSENT on one side — 0 is a real,
+                            // comparable version (a test attempted before it had
+                            // ever been edited), not "unknown".
+                            const hasBothVersions = typeof currentVersion !== 'undefined' && typeof r.testVersion !==
+                                'undefined';
+                            const isStale = hasBothVersions && currentVersion !== r.testVersion;
+                            if (isStale) return;
+                            const prevScore = attemptedRecords[code];
+                            if (prevScore === undefined || Number(r.score) > Number(prevScore)) {
+                                attemptedRecords[code] = r.score;
+                            }
                         }
-                    }
+                    });
+                    window.attemptedTestsCache = attemptedRecords;
+                    localStorage.setItem(key, JSON.stringify(attemptedRecords));
+                    if (typeof onDone === 'function') onDone(attemptedRecords);
                 });
-                window.attemptedTestsCache = attemptedRecords;
-                localStorage.setItem(key, JSON.stringify(attemptedRecords));
-                if (typeof onDone === 'function') onDone(attemptedRecords);
             };
             if (uid) {
                 db.collection("results").where("uid", "==", uid).get().then(snap => {
@@ -11638,6 +11656,42 @@
             const list = document.getElementById('st-hist-list');
             if (!list) return;
 
+            // ---- Fetch CURRENT `updatedAt` fresh, directly from Firestore ----
+            // Don't rely on window.globalActiveTests / getAllMergedTests() here —
+            // that only gets populated once the "Active Tests" listener has been
+            // attached (e.g. by visiting that tab), so a student who opens My
+            // Report straight from the header menu can hit this with an EMPTY
+            // cache, which would silently disable the whole stale-result check.
+            // Fetching directly for exactly the test codes the student has
+            // results for guarantees an accurate, up-to-date comparison no
+            // matter which screen they came from.
+            const attemptedCodes = Array.from(new Set(
+                rawRecords.map(r => r.testCode ? String(r.testCode).replace('-RE', '') : '').filter(Boolean)
+            ));
+            Promise.all(attemptedCodes.map(code =>
+                db.collection("tests").doc(code).get().then(doc => ({ code, data: doc.exists ? doc.data() : null }))
+                    .catch(() => ({ code, data: null }))
+            )).then(freshTestDocs => {
+                const freshVersionOf = {};
+                const freshTestByCode = {};
+                freshTestDocs.forEach(({ code, data: td }) => {
+                    if (!td) return; // test was deleted entirely -> no version info, handled by "keep" fallback below
+                    freshTestByCode[code] = td;
+                    const ts = td.updatedAt;
+                    freshVersionOf[code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) : undefined;
+                });
+                window._proceedWithReportRecords(rawRecords, freshVersionOf, freshTestByCode);
+            }).catch(() => {
+                // Firestore fetch failed entirely (e.g. offline) — fall back to
+                // whatever's in the shared cache rather than blocking the report.
+                window._proceedWithReportRecords(rawRecords, null, null);
+            });
+        };
+
+        window._proceedWithReportRecords = function(rawRecords, freshVersionOf, freshTestByCode) {
+            const list = document.getElementById('st-hist-list');
+            if (!list) return;
+
             const allSavedTests = window.getAllMergedTests();
 
             // ---- Stale-result filtering ----
@@ -11656,6 +11710,10 @@
                 const ts = t.updatedAt;
                 testVersionOf[t.code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) : undefined;
             });
+            // The direct Firestore fetch above is authoritative when available
+            // — it overrides/fills in anything the listener-based cache had
+            // (or didn't have).
+            if (freshVersionOf) Object.assign(testVersionOf, freshVersionOf);
             const records = rawRecords.filter(r => {
                 const code = r.testCode ? String(r.testCode).replace('-RE', '') : '';
                 const currentVersion = testVersionOf[code];
@@ -11684,6 +11742,13 @@
                 if (examSel) examSel.innerHTML = '<option value="all">All Exams</option>';
                 window.currentReportExam = 'all';
                 return;
+            }
+
+            if (freshTestByCode) {
+                const existingCodes = new Set(allSavedTests.map(t => t.code));
+                Object.keys(freshTestByCode).forEach(code => {
+                    if (!existingCodes.has(code)) allSavedTests.push({ ...freshTestByCode[code], code });
+                });
             }
 
             // Keep the raw, unfiltered data around so switching the Exam
