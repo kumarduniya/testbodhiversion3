@@ -11815,9 +11815,11 @@
             }
 
             if (freshTestByCode) {
-                const existingCodes = new Set(allSavedTests.map(t => t.code));
                 Object.keys(freshTestByCode).forEach(code => {
-                    if (!existingCodes.has(code)) allSavedTests.push({ ...freshTestByCode[code], code });
+                    const idx = allSavedTests.findIndex(t => t.code === code);
+                    const freshEntry = { ...freshTestByCode[code], code };
+                    if (idx === -1) allSavedTests.push(freshEntry);
+                    else allSavedTests[idx] = freshEntry; // replace stale public-only cached copy with the secure-merged one
                 });
             }
 
