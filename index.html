@@ -6146,14 +6146,20 @@
                 const testVersionOf = {};
                 (window.getAllMergedTests ? window.getAllMergedTests() : []).forEach(t => {
                     const ts = t.updatedAt;
-                    testVersionOf[t.code] = (ts && typeof ts.toMillis === 'function') ? ts.toMillis() : (ts || 0);
+                    testVersionOf[t.code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) : undefined;
                 });
                 const attemptedRecords = {};
                 records.forEach(r => {
                     if (r.testCode) {
                         const code = String(r.testCode).replace('-RE', '');
                         const currentVersion = testVersionOf[code];
-                        const isStale = currentVersion && r.testVersion && currentVersion !== r.testVersion;
+                        // Only treat as "no version info" (always keep) when the
+                        // field is truly ABSENT on one side — 0 is a real,
+                        // comparable version (a test attempted before it had
+                        // ever been edited), not "unknown".
+                        const hasBothVersions = typeof currentVersion !== 'undefined' && typeof r.testVersion !==
+                            'undefined';
+                        const isStale = hasBothVersions && currentVersion !== r.testVersion;
                         if (isStale) return;
                         const prevScore = attemptedRecords[code];
                         if (prevScore === undefined || Number(r.score) > Number(prevScore)) {
@@ -11648,12 +11654,16 @@
             const testVersionOf = {};
             allSavedTests.forEach(t => {
                 const ts = t.updatedAt;
-                testVersionOf[t.code] = (ts && typeof ts.toMillis === 'function') ? ts.toMillis() : (ts || 0);
+                testVersionOf[t.code] = ts ? ((typeof ts.toMillis === 'function') ? ts.toMillis() : ts) : undefined;
             });
             const records = rawRecords.filter(r => {
                 const code = r.testCode ? String(r.testCode).replace('-RE', '') : '';
                 const currentVersion = testVersionOf[code];
-                if (!currentVersion || !r.testVersion) return true; // no version info on either side -> keep (legacy)
+                // Only "no version info" (always keep) when the field is
+                // truly ABSENT on one side — 0 is a real, comparable version
+                // (attempted before the test had ever been edited), not
+                // "unknown".
+                if (typeof currentVersion === 'undefined' || typeof r.testVersion === 'undefined') return true;
                 return currentVersion === r.testVersion;
             });
 
