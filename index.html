@@ -9982,12 +9982,15 @@
             pA.innerHTML = h + '</td></tr></tbody></table>';
 
             document.body.classList.add('print-pdf');
+            const _prevZoomForPrint = document.body.style.zoom;
+            document.body.style.zoom = '1';
 
             const triggerPrint = () => {
                 setTimeout(() => {
                     window.print();
                     setTimeout(() => {
                         document.body.classList.remove('print-pdf');
+                        document.body.style.zoom = _prevZoomForPrint;
                     }, 1000);
                 }, 600);
             };
@@ -10147,10 +10150,15 @@
             pA.innerHTML = h;
 
             document.body.classList.add('print-pdf');
+            const _prevZoomForPrint2 = document.body.style.zoom;
+            document.body.style.zoom = '1';
             const triggerPrint = () => {
                 setTimeout(() => {
                     window.print();
-                    setTimeout(() => { document.body.classList.remove('print-pdf'); }, 1000);
+                    setTimeout(() => {
+                        document.body.classList.remove('print-pdf');
+                        document.body.style.zoom = _prevZoomForPrint2;
+                    }, 1000);
                 }, 600);
             };
             if (window.MathJax) {
