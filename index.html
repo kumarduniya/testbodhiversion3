@@ -13238,42 +13238,9 @@
     <!-- ===== PRINT AREA ===== -->
     <div id="print-area"></div>
 <script>
-    // 1. Right-Click Disable
-    document.addEventListener('contextmenu', event => event.preventDefault());
-
-    // 2. Keyboard Shortcuts Disable
-    document.addEventListener('keydown', function (event) {
-        if (event.key === 'F12' || event.keyCode === 123 || 
-           (event.ctrlKey && event.shiftKey && (event.key === 'I' || event.key === 'i' || event.key === 'J' || event.key === 'j' || event.key === 'C' || event.key === 'c')) ||
-           (event.ctrlKey && (event.key === 'U' || event.key === 'u'))) {
-            event.preventDefault();
-            document.body.innerHTML = "";
-            window.location.replace("about:blank");
-            return false;
-        }
-    });
-
-    // 3. SUPER AGGRESSIVE AUTO-WIPE (Bina popup ke gayab karega)
-    setInterval(function () {
-        // Trick A: Agar DevTools screen ke side ya niche khula (Docked), toh screen size change hoga
-        var widthDiff = window.outerWidth - window.innerWidth;
-        var heightDiff = window.outerHeight - window.innerHeight;
-        
-        // Agar difference 200 pixel se zyada hai, matlab Inspect panel khul gaya hai
-        if (widthDiff > 200 || heightDiff > 200) {
-            document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:20%; font-family:sans-serif;'>⚠️ Security Alert: Cheating Attempt Detected!</h1>";
-            window.location.replace("about:blank");
-        }
-
-        // Trick B: Agar DevTools alag window mein khula (Undocked), toh timing trick pakad legi
-        var start = performance.now();
-        debugger; 
-        var end = performance.now();
-        if (end - start > 50) {
-            document.body.innerHTML = "";
-            window.location.replace("about:blank");
-        }
-    }, 500); // Har aadhe second mein scan karega
+    // ============ DEBUG BUILD: anti-devtools blocking DISABLED ============
+    // This copy is for local debugging ONLY — do not deploy this file.
+    console.log("🔧 DEBUG BUILD — DevTools blocking disabled for troubleshooting.");
 </script>
 </body>
 </html>
