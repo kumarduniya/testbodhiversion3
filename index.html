@@ -3443,6 +3443,29 @@
                 padding: 0 !important;
                 zoom: 1 !important;
             }
+            /* Dark mode's CSS variables must never leak into print. Print
+               already forces a white page background above, but any content
+               styled via var(--text-main)/var(--bg-subtle)/etc (like the My
+               Report Solution styles reused inside the PDF) was still
+               resolving to dark-mode's near-white text color — rendering
+               invisible white-on-white despite the content genuinely being
+               there. Overriding the variables themselves (rather than
+               forcing color on every element) fixes this while leaving
+               intentionally-colored inline elements (blue summary boxes,
+               green/red correct-wrong badges, etc.) untouched. */
+            #print-area {
+                --text-main: #1a2332;
+                --text-muted: #55606e;
+                --text-light: #7a8494;
+                --border-color: #d5dbe3;
+                --bg-subtle: #f4f6f9;
+                --bg-card: #ffffff;
+                --bg-input: #ffffff;
+                --primary: #0f2b5c;
+                --primary-light: #1a4b8c;
+                color: #1a2332 !important;
+                background: #fff !important;
+            }
             .container {
                 box-shadow: none !important;
             }
@@ -13238,9 +13261,42 @@
     <!-- ===== PRINT AREA ===== -->
     <div id="print-area"></div>
 <script>
-    // ============ DEBUG BUILD: anti-devtools blocking DISABLED ============
-    // This copy is for local debugging ONLY — do not deploy this file.
-    console.log("🔧 DEBUG BUILD — DevTools blocking disabled for troubleshooting.");
+    // 1. Right-Click Disable
+    document.addEventListener('contextmenu', event => event.preventDefault());
+
+    // 2. Keyboard Shortcuts Disable
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'F12' || event.keyCode === 123 || 
+           (event.ctrlKey && event.shiftKey && (event.key === 'I' || event.key === 'i' || event.key === 'J' || event.key === 'j' || event.key === 'C' || event.key === 'c')) ||
+           (event.ctrlKey && (event.key === 'U' || event.key === 'u'))) {
+            event.preventDefault();
+            document.body.innerHTML = "";
+            window.location.replace("about:blank");
+            return false;
+        }
+    });
+
+    // 3. SUPER AGGRESSIVE AUTO-WIPE (Bina popup ke gayab karega)
+    setInterval(function () {
+        // Trick A: Agar DevTools screen ke side ya niche khula (Docked), toh screen size change hoga
+        var widthDiff = window.outerWidth - window.innerWidth;
+        var heightDiff = window.outerHeight - window.innerHeight;
+        
+        // Agar difference 200 pixel se zyada hai, matlab Inspect panel khul gaya hai
+        if (widthDiff > 200 || heightDiff > 200) {
+            document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:20%; font-family:sans-serif;'>⚠️ Security Alert: Cheating Attempt Detected!</h1>";
+            window.location.replace("about:blank");
+        }
+
+        // Trick B: Agar DevTools alag window mein khula (Undocked), toh timing trick pakad legi
+        var start = performance.now();
+        debugger; 
+        var end = performance.now();
+        if (end - start > 50) {
+            document.body.innerHTML = "";
+            window.location.replace("about:blank");
+        }
+    }, 500); // Har aadhe second mein scan karega
 </script>
 </body>
 </html>
